@@ -14,24 +14,29 @@ statcfg.statistic = 'depsamplesT';
 statcfg.method = 'montecarlo';
 statcfg.neighbours = []; % no neighbours in 1D
 
-pp2do = 1:25;
-s = 0;
+min_len = inf;
+for pp = pp2do
+    param = getSubjParam(pp);
+    load([param.path, 'eyetrackingdata/saccadedata/saccadebias__1D__', param.subjName], 'saccade');
+    min_len = min(min_len, size(saccade.effect, 2));
+end
 
+d3 = []; % initialize as dynamic in case of different lengths
+s = 0;
 for pp = pp2do
     s = s + 1;
-
     param = getSubjParam(pp);
     disp(['Loading data from participant ', param.subjName]);
-
     load([param.path, 'eyetrackingdata/saccadedata/saccadebias__1D__', param.subjName], 'saccade');
 
-    d3(s,:,:) = saccade.effect; % aggregate towardness effect across participants
+    d3(s,:,:) = saccade.effect(:,1:min_len); % truncate to min length
 
     if s == 1
-        saccade_time = saccade.time;
+        saccade_time = saccade.time(1:min_len); % truncate time vector
         saccade_label = saccade.label;
     end
 end
+
 
 %% === Saccade bias data - stats ===
 statcfg = [];
@@ -72,6 +77,7 @@ p2.LineWidth = 1.5;
 
 plot(xlim, [0, 0], '--', 'LineWidth', 2, 'Color', [0.6, 0.6, 0.6]);
 plot([0, 0], ylimit, '--', 'LineWidth', 2, 'Color', [0.6, 0.6, 0.6]);
+xlimtoplot = [0 1500];
 
 xlim(xlimtoplot); % or whatever range you want;
 sig1 = plot(saccade.time(timeframe), mask_1 * -0.11, 'Color', color_cue_colblock, 'LineWidth', 4); % significance line
@@ -87,7 +93,34 @@ xlabel('Time (ms)');
 % fontsize(ft_size*1.5,"points")
 
 legend([p1, p2], saccade.label([4,6]));
-signif_time_ms = [min(find(stat1.mask == 1)), max(find(stat1.mask == 1))];
-disp(signif_time_ms);
+% Define stats in a cell array
+stats = {stat1, stat2, stat_comp};
+stat_names = {'stat1', 'stat2', 'stat_comp'};
 
+for i = 1:length(stats)
+    stat = stats{i};
+    fprintf('--- %s ---\n', stat_names{i});
+    
+    % Positive cluster check
+    if ~isempty(stat.posclusters)
+        pos_range = find(stat.mask & stat.stat > 0);  % mask + positive effect
+        if ~isempty(pos_range)
+            fprintf('Positive cluster at indices: %d to %d\n', min(pos_range), max(pos_range));
+        end
+    else
+        fprintf('No positive cluster.\n');
+    end
+
+    % Negative cluster check
+    if ~isempty(stat.negclusters)
+        neg_range = find(stat.mask & stat.stat < 0);  % mask + negative effect
+        if ~isempty(neg_range)
+            fprintf('Negative cluster at indices: %d to %d\n', min(neg_range), max(neg_range));
+        end
+    else
+        fprintf('No negative cluster.\n');
+    end
+    
+    fprintf('\n');
+end
 
